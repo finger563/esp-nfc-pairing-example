@@ -8,8 +8,12 @@
 #include <esp_bt_device.h>
 #include <esp_bt_main.h>
 #include <esp_gatt_common_api.h>
+#include <esp_random.h>
 #include <driver/i2c.h>
 #include <nvs_flash.h>
+
+#include "esp_hid_gap.h"
+#include "ble.hpp"
 
 #include "logger.hpp"
 #include "ndef.hpp"
@@ -19,8 +23,8 @@
 using namespace std::chrono_literals;
 
 static constexpr auto I2C_NUM = I2C_NUM_1;
-static constexpr auto I2C_SCL_IO = GPIO_NUM_19;
-static constexpr auto I2C_SDA_IO = GPIO_NUM_22;
+static constexpr auto I2C_SCL_IO = GPIO_NUM_40; // Qwiic SCL on QtPy ESP32S3
+static constexpr auto I2C_SDA_IO = GPIO_NUM_41; // Qwiic SDA on QtPy ESP32S3
 static constexpr auto I2C_FREQ_HZ = (400 * 1000);
 static constexpr auto I2C_TIMEOUT_MS = 10;
 
@@ -78,40 +82,38 @@ extern "C" void app_main(void) {
     });
 
   // initialize bluedroid stack
-  logger.info("initializing bluedroid...");
-  esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
-  err = esp_bt_controller_init(&bt_cfg);
-  if (err != ESP_OK)
-    logger.error("initialize controller failed");
+  esp_hid_gap_init();
 
-  err = esp_bt_controller_enable(ESP_BT_MODE_BLE);
-  if (err != ESP_OK)
-    logger.error("enable controller failed");
-
-  err = esp_bluedroid_init();
-  if (err != ESP_OK)
-    logger.error("initialize bluedroid failed");
-
-  err = esp_bluedroid_enable();
-  if (err != ESP_OK)
-    logger.error("enable bluedroid failed");
+  // don't want a lot of logs (and all the logs can cause the ble_hid task stack
+  // to overflow)
+  esp_log_level_set("HID_DEV_BLE", ESP_LOG_NONE);
 
   // get the mac address of the radio
   const uint8_t* point = esp_bt_dev_get_address();
   uint64_t radio_mac_addr = 0;
   if (point == nullptr) {
     logger.error("get bt mac address failed");
+    return;
   } else {
     // convert the 6 byte mac address to a 48 bit integer
     for (int i = 0; i < 6; i++) {
-      radio_mac_addr |= (uint64_t)point[i] << (i * 8);
+      radio_mac_addr |= (uint64_t)point[5-i] << (i * 8);
     }
   }
-  logger.info("radio mac addr: {::#x}", radio_mac_addr);
+  logger.info("radio mac addr: {:#x}", radio_mac_addr);
 
   // set the bluetooth name
-  std::string device_name = "My Xbox Wireless Controller";
+  std::string device_name = "NFC Xbox Elite Wireless Controller";
   esp_bt_dev_set_device_name(device_name.c_str());
+
+  uint32_t random_number = esp_random();
+  std::string serial_number = fmt::format("{:010d}", random_number);
+  logger.info("Generated serial number: {}", serial_number);
+  [[maybe_unused]] auto ble_hid_dev = init_ble_hid(0x045E, // Microsoft
+                                                   0x02FD, // Xbox Elite Wireless Controller
+                                                   "Microsoft Corporation",
+                                                   "NFC Xbox Elite Wireless Controller",
+                                                   serial_number);
 
   // create BT OOB pairing record
   uint32_t bt_device_class = 0x000000;      // 24b
@@ -127,6 +129,7 @@ extern "C" void app_main(void) {
   // set one of the records we made to be the active tag
   st25dv.set_record(ble_oob_record);
 
+  logger.info("bt oob record:  {::#x}", bt_oob_record.payload());
   logger.info("ble oob record:  {::#x}", ble_oob_record.payload());
 
   // Make a task that will run in the background and print the interrupt status
@@ -149,9 +152,7 @@ extern "C" void app_main(void) {
     });
   task.start();
 
-  // also print in the main thread
   while (true) {
-    logger.debug("[{:.3f}] Hello World!", elapsed());
     std::this_thread::sleep_for(1s);
   }
 }
