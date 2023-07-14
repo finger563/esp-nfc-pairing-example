@@ -37,6 +37,6 @@ See the Getting Started Guide for full steps to configure and use ESP-IDF to bui
 
 Example screenshot of the console output from this app:
 
-![CleanShot 2023-07-14 at 12 17 21](https://github.com/finger563/esp-nfc-pairing-example/assets/213467/9b12ebcb-d4d4-434c-a68b-882cc19adbbb)
+![CleanShot 2023-07-14 at 12 17 21](https://github.com/finger563/esp-nfc-pairing-example/assets/213467/d66dac41-f687-4e1d-b6dd-30feba18f6c3)
 
-https://github.com/finger563/esp-nfc-pairing-example/assets/213467/f97294bb-5178-45f0-a895-a1cf329592fa
+https://github.com/finger563/esp-nfc-pairing-example/assets/213467/2768ae6b-b283-4760-aa0d-be04ef730260
