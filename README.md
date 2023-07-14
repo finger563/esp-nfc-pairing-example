@@ -1,6 +1,6 @@
 # ESP NFC Out of Band (OOB) BLE Pairing Example
 
-Example application for ESP32 to demonstrate NFC OOB BLE pairing with an Android
+Example application for ESP32S3 to demonstrate NFC OOB BLE pairing with an Android
 phone.
 
 ## Cloning
@@ -37,4 +37,6 @@ See the Getting Started Guide for full steps to configure and use ESP-IDF to bui
 
 Example screenshot of the console output from this app:
 
-![CleanShot 2023-07-12 at 14 01 21](https://github.com/esp-cpp/template/assets/213467/7f8abeae-121b-4679-86d8-7214a76f1b75)
+![CleanShot 2023-07-14 at 12 17 21](https://github.com/finger563/esp-nfc-pairing-example/assets/213467/9b12ebcb-d4d4-434c-a68b-882cc19adbbb)
+
+https://github.com/finger563/esp-nfc-pairing-example/assets/213467/f97294bb-5178-45f0-a895-a1cf329592fa
