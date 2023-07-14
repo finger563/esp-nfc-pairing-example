@@ -87,6 +87,7 @@ extern "C" void app_main(void) {
   // don't want a lot of logs (and all the logs can cause the ble_hid task stack
   // to overflow)
   esp_log_level_set("HID_DEV_BLE", ESP_LOG_NONE);
+  esp_log_level_set("ESP_HID_GAP", ESP_LOG_WARN);
 
   // get the mac address of the radio
   const uint8_t* point = esp_bt_dev_get_address();
@@ -115,16 +116,42 @@ extern "C" void app_main(void) {
                                                    "NFC Xbox Elite Wireless Controller",
                                                    serial_number);
 
+  std::string confirmation_value{""};       // 128b
+  std::string randomizer_value{""};         // 128b
+  // set the confirmation value and randomizer value (For now just set both to
+  // 1)
+  confirmation_value.resize(16, 0);
+  randomizer_value.resize(16, 0);
+  confirmation_value[0] = 1;
+  randomizer_value[0] = 1;
+
   // create BT OOB pairing record
   uint32_t bt_device_class = 0x000000;      // 24b
   auto bt_oob_record =
-    espp::Ndef::make_oob_pairing(radio_mac_addr, bt_device_class, device_name);
+    espp::Ndef::make_oob_pairing(radio_mac_addr, bt_device_class, device_name,
+                                 confirmation_value, randomizer_value);
+
+  // esp_ble_local_oob_data_t contains the 128 bit confirmation value and the
+  // 128 bit randomizer value (oob_c and oob_r respectively)
+
+  // enable BLE OOB pairing using ESP_BLE_OOB_ENABLE
+
 
   // create BLE OOB pairing record
+  esp_ble_create_sc_oob_data();
+  // now access it
+
+  // get the temporary key from the esp_ble_sec_t struct
+  // it's within esp_ble_sec_t under the oob_data field
+  std::string tk = "";                     // 128b
+  // for now just set it to all zeros except the first, which is 1
+  tk.resize(16, 0);
+  tk[0] = 1;
+
   auto ble_role = espp::Ndef::BleRole::PERIPHERAL_ONLY;
   auto ble_appearance = espp::Ndef::BtAppearance::GAMEPAD;
   auto ble_oob_record =
-    espp::Ndef::make_le_oob_pairing(radio_mac_addr, ble_role, device_name, ble_appearance);
+    espp::Ndef::make_le_oob_pairing(radio_mac_addr, ble_role, device_name, ble_appearance, tk);
 
   // set one of the records we made to be the active tag
   st25dv.set_record(ble_oob_record);
