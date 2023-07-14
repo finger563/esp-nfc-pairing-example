@@ -1,7 +1,15 @@
 #include <chrono>
 #include <thread>
 
+#include <esp_bt.h>
+#include <esp_gap_ble_api.h>
+#include <esp_gatts_api.h>
+#include <esp_bt_defs.h>
+#include <esp_bt_device.h>
+#include <esp_bt_main.h>
+#include <esp_gatt_common_api.h>
 #include <driver/i2c.h>
+#include <nvs_flash.h>
 
 #include "logger.hpp"
 #include "ndef.hpp"
@@ -26,6 +34,14 @@ extern "C" void app_main(void) {
   espp::Logger logger({.tag = "NFC BLE OOB", .level = espp::Logger::Verbosity::DEBUG});
 
   logger.info("Bootup");
+
+  // Initialize NVS.
+  auto ret = nvs_flash_init();
+  if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    ESP_ERROR_CHECK(nvs_flash_erase());
+    ret = nvs_flash_init();
+  }
+  ESP_ERROR_CHECK(ret);
 
   // make the I2C that we'll use to communicate
   i2c_config_t i2c_cfg;
@@ -61,19 +77,52 @@ extern "C" void app_main(void) {
       .log_level = espp::Logger::Verbosity::DEBUG
     });
 
+  // initialize bluedroid stack
+  logger.info("initializing bluedroid...");
+  esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
+  err = esp_bt_controller_init(&bt_cfg);
+  if (err != ESP_OK)
+    logger.error("initialize controller failed");
+
+  err = esp_bt_controller_enable(ESP_BT_MODE_BLE);
+  if (err != ESP_OK)
+    logger.error("enable controller failed");
+
+  err = esp_bluedroid_init();
+  if (err != ESP_OK)
+    logger.error("initialize bluedroid failed");
+
+  err = esp_bluedroid_enable();
+  if (err != ESP_OK)
+    logger.error("enable bluedroid failed");
+
+  // get the mac address of the radio
+  const uint8_t* point = esp_bt_dev_get_address();
+  uint64_t radio_mac_addr = 0;
+  if (point == nullptr) {
+    logger.error("get bt mac address failed");
+  } else {
+    // convert the 6 byte mac address to a 48 bit integer
+    for (int i = 0; i < 6; i++) {
+      radio_mac_addr |= (uint64_t)point[i] << (i * 8);
+    }
+  }
+  logger.info("radio mac addr: {::#x}", radio_mac_addr);
+
+  // set the bluetooth name
+  std::string device_name = "My Xbox Wireless Controller";
+  esp_bt_dev_set_device_name(device_name.c_str());
+
   // create BT OOB pairing record
-  uint64_t radio_mac_addr = 0x060504030201; // 48b
   uint32_t bt_device_class = 0x000000;      // 24b
-  std::string_view bt_radio_name = "BT Radio";
   auto bt_oob_record =
-    espp::Ndef::make_oob_pairing(radio_mac_addr, bt_device_class, bt_radio_name);
+    espp::Ndef::make_oob_pairing(radio_mac_addr, bt_device_class, device_name);
 
   // create BLE OOB pairing record
   auto ble_role = espp::Ndef::BleRole::PERIPHERAL_ONLY;
   auto ble_appearance = espp::Ndef::BtAppearance::GAMEPAD;
-  std::string_view ble_radio_name = "My BLE";
   auto ble_oob_record =
-    espp::Ndef::make_le_oob_pairing(radio_mac_addr, ble_role, ble_radio_name, ble_appearance);
+    espp::Ndef::make_le_oob_pairing(radio_mac_addr, ble_role, device_name, ble_appearance);
 
   // set one of the records we made to be the active tag
   st25dv.set_record(ble_oob_record);
