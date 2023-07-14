@@ -3,8 +3,6 @@
 Example application for ESP32 to demonstrate NFC OOB BLE pairing with an Android
 phone.
 
-This example is based on the following example from the ESP-IDF repository:
-
 ## Cloning
 
 Since this repo contains a submodule, you need to make sure you clone it

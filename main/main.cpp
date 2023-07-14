@@ -80,14 +80,19 @@ extern "C" void app_main(void) {
 
   logger.info("ble oob record:  {::#x}", ble_oob_record.payload());
 
-  // make a simple task that prints "Hello World!" every second
+  // Make a task that will run in the background and print the interrupt status
+  // when it changes
   espp::Task task({
       .name = "St25dv Field Change",
       .callback = [&](auto &m, auto &cv) -> bool {
         auto it_sts = st25dv.get_interrupt_status();
-        logger.info("[{:.3f}] IT STS: {:02x}", elapsed(), it_sts);
+        static auto last_it_sts = it_sts;
+        if (it_sts != last_it_sts) {
+          logger.info("[{:.3f}] IT STS: {:02x}", elapsed(), it_sts);
+        }
+        last_it_sts = it_sts;
         std::unique_lock<std::mutex> lock(m);
-        cv.wait_for(lock, 1s);
+        cv.wait_for(lock, 10ms);
         // we don't want to stop the task, so return false
         return false;
       },
