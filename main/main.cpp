@@ -113,7 +113,7 @@ extern "C" void app_main(void) {
   [[maybe_unused]] auto ble_hid_dev = init_ble_hid(0x045E, // Microsoft
                                                    0x02FD, // Xbox Elite Wireless Controller
                                                    "Microsoft Corporation",
-                                                   "NFC Xbox Elite Wireless Controller",
+                                                   device_name.c_str(),
                                                    serial_number);
 
   // create BLE OOB pairing record
@@ -142,8 +142,8 @@ extern "C" void app_main(void) {
   oob_r.resize(16, 0);
   std::vector<uint8_t> oob_c;
   oob_c.resize(16, 0);
-  memcpy(oob_r.data(), oob_data_ptr->oob_r, 16);
-  memcpy(oob_c.data(), oob_data_ptr->oob_c, 16);
+  memcpy(oob_r.data(), randomizer_value.data(), randomizer_value.size());
+  memcpy(oob_c.data(), confirmation_value.data(), confirmation_value.size());
 
   logger.debug("confirmation value: {::02x}", oob_c);
   logger.debug("randomizer value: {::02x}", oob_r);
@@ -157,15 +157,9 @@ extern "C" void app_main(void) {
   // get the temporary key from the esp_ble_sec_t struct
   // it's within esp_ble_sec_t under the oob_data field
   std::string tk = "";                     // 128b
-  // for now just set it to all zeros except the first, which is 1
+  // for now just set it to 1
   tk.resize(16, 0);
   tk[0] = 1;
-
-  uint8_t key_size = 16;                   // 8b
-  esp_ble_gap_set_security_param(ESP_BLE_SM_MAX_KEY_SIZE, &key_size, sizeof(uint8_t));
-  uint8_t *init_key = (uint8_t*)(tk.data());           // 128b
-  esp_ble_gap_set_security_param(ESP_BLE_SM_SET_INIT_KEY, init_key, sizeof(uint8_t));
-  // esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rsp_key, sizeof(uint8_t));
 
   auto ble_role = espp::Ndef::BleRole::PERIPHERAL_ONLY;
   auto ble_appearance = espp::Ndef::BtAppearance::GAMEPAD;

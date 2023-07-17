@@ -17,6 +17,7 @@ static const char *TAG = "ESP_HID_GAP";
 
 static bool created_oob_data = false;
 static esp_ble_local_oob_data_t oob_data;
+static uint8_t TK[16] = {0x01};
 static SemaphoreHandle_t ble_hidh_cb_semaphore = NULL;
 #define WAIT_BLE_CB() xSemaphoreTake(ble_hidh_cb_semaphore, portMAX_DELAY)
 #define SEND_BLE_CB() xSemaphoreGive(ble_hidh_cb_semaphore)
@@ -223,7 +224,6 @@ static void ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_p
     case ESP_GAP_BLE_OOB_REQ_EVT:
         // OOB request event
         ESP_LOGI(TAG, "BLE GAP OOB_REQ");
-        uint8_t TK[16] = {0x01};
         esp_ble_oob_req_reply(param->ble_security.ble_req.bd_addr, TK, sizeof(TK));
         break;
 
@@ -231,9 +231,6 @@ static void ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_p
         // secure connection oob request event
         ESP_LOGI(TAG, "BLE GAP SC_OOB_REQ");
         esp_err_t err = esp_ble_sc_oob_req_reply(param->ble_security.ble_req.bd_addr, oob_data.oob_c, oob_data.oob_r);
-        if (err) {
-            ESP_LOGE(TAG, "esp_ble_sc_oob_req_reply: %s", esp_err_to_name(err));
-        }
         break;
 
     case ESP_GAP_BLE_SC_CR_LOC_OOB_EVT:
@@ -323,19 +320,19 @@ esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance,
         .p_manufacturer_data = manufacturer_name,
     };
 
-    // esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_BOND_MITM;
-    // esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_BOND;
-    // esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_MITM;
-    esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_MITM_BOND;
-    if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_AUTHEN_REQ_MODE, &auth_req, 1)) !=
-        ESP_OK) {
-        ESP_LOGE(TAG, "GAP set_security_param AUTHEN_REQ_MODE failed: %d", ret);
-        return ret;
-    }
-
     esp_ble_io_cap_t iocap = ESP_IO_CAP_NONE; // device is not capable of input or output, unsecure
     if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_IOCAP_MODE, &iocap, 1)) != ESP_OK) {
         ESP_LOGE(TAG, "GAP set_security_param IOCAP_MODE failed: %d", ret);
+        return ret;
+    }
+
+    // esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_BOND_MITM; // added as part of TK OOB PR
+    // esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_BOND;
+    // esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_MITM;
+    esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_MITM_BOND; // used with randomizer / confirmation values
+    if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_AUTHEN_REQ_MODE, &auth_req, 1)) !=
+        ESP_OK) {
+        ESP_LOGE(TAG, "GAP set_security_param AUTHEN_REQ_MODE failed: %d", ret);
         return ret;
     }
 
@@ -344,6 +341,20 @@ esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance,
         ESP_LOGE(TAG, "GAP set_security_param OOB_SUPPORT failed: %d", ret);
         return ret;
     }
+
+    uint8_t spec_auth = ESP_BLE_ONLY_ACCEPT_SPECIFIED_AUTH_ENABLE;
+    if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_ONLY_ACCEPT_SPECIFIED_SEC_AUTH, &spec_auth, sizeof(uint8_t))) != ESP_OK) {
+        ESP_LOGE(TAG, "GAP set_security_param ONLY_ACCEPT_SPECIFIED_SEC_AUTH failed: %d", ret);
+        return ret;
+    }
+
+    uint8_t key_size = 16;      //the key size should be 7~16 bytes
+    uint8_t init_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
+    uint8_t rsp_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
+
+    esp_ble_gap_set_security_param(ESP_BLE_SM_MAX_KEY_SIZE, &key_size, sizeof(uint8_t));
+    esp_ble_gap_set_security_param(ESP_BLE_SM_SET_INIT_KEY, &init_key, sizeof(uint8_t));
+    esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rsp_key, sizeof(uint8_t));
 
     if ((ret = esp_ble_gap_set_device_name(device_name)) != ESP_OK) {
         ESP_LOGE(TAG, "GAP set_device_name failed: %d", ret);
