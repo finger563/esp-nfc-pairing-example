@@ -87,7 +87,7 @@ extern "C" void app_main(void) {
   // don't want a lot of logs (and all the logs can cause the ble_hid task stack
   // to overflow)
   esp_log_level_set("HID_DEV_BLE", ESP_LOG_NONE);
-  esp_log_level_set("ESP_HID_GAP", ESP_LOG_WARN);
+  esp_log_level_set("ESP_HID_GAP", ESP_LOG_INFO);
 
   // get the mac address of the radio
   const uint8_t* point = esp_bt_dev_get_address();
@@ -116,30 +116,43 @@ extern "C" void app_main(void) {
                                                    "NFC Xbox Elite Wireless Controller",
                                                    serial_number);
 
+  // create BLE OOB pairing record
+  esp_ble_create_sc_oob_data();
+
+  logger.info("Waiting for OOB data to be created...");
+  while (!has_created_oob_sec_data()) {
+    std::this_thread::sleep_for(100ms);
+  }
+
+  // now access it
+  auto oob_data_ptr = get_oob_sec_data_ptr();
+
+  // now copy the bytes from oob_data_ptr into the correct variables
   std::string confirmation_value{""};       // 128b
   std::string randomizer_value{""};         // 128b
   // set the confirmation value and randomizer value (For now just set both to
   // 1)
   confirmation_value.resize(16, 0);
   randomizer_value.resize(16, 0);
-  confirmation_value[0] = 1;
-  randomizer_value[0] = 1;
+  memcpy(confirmation_value.data(), oob_data_ptr->oob_c, 16);
+  memcpy(randomizer_value.data(), oob_data_ptr->oob_r, 16);
+
+  // for printing purposes
+  std::vector<uint8_t> oob_r;
+  oob_r.resize(16, 0);
+  std::vector<uint8_t> oob_c;
+  oob_c.resize(16, 0);
+  memcpy(oob_r.data(), oob_data_ptr->oob_r, 16);
+  memcpy(oob_c.data(), oob_data_ptr->oob_c, 16);
+
+  logger.debug("confirmation value: {::02x}", oob_c);
+  logger.debug("randomizer value: {::02x}", oob_r);
 
   // create BT OOB pairing record
   uint32_t bt_device_class = 0x000000;      // 24b
   auto bt_oob_record =
     espp::Ndef::make_oob_pairing(radio_mac_addr, bt_device_class, device_name,
-                                 confirmation_value, randomizer_value);
-
-  // esp_ble_local_oob_data_t contains the 128 bit confirmation value and the
-  // 128 bit randomizer value (oob_c and oob_r respectively)
-
-  // enable BLE OOB pairing using ESP_BLE_OOB_ENABLE
-
-
-  // create BLE OOB pairing record
-  esp_ble_create_sc_oob_data();
-  // now access it
+                                 randomizer_value, confirmation_value);
 
   // get the temporary key from the esp_ble_sec_t struct
   // it's within esp_ble_sec_t under the oob_data field
@@ -148,16 +161,23 @@ extern "C" void app_main(void) {
   tk.resize(16, 0);
   tk[0] = 1;
 
+  uint8_t key_size = 16;                   // 8b
+  esp_ble_gap_set_security_param(ESP_BLE_SM_MAX_KEY_SIZE, &key_size, sizeof(uint8_t));
+  uint8_t *init_key = (uint8_t*)(tk.data());           // 128b
+  esp_ble_gap_set_security_param(ESP_BLE_SM_SET_INIT_KEY, init_key, sizeof(uint8_t));
+  // esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rsp_key, sizeof(uint8_t));
+
   auto ble_role = espp::Ndef::BleRole::PERIPHERAL_ONLY;
   auto ble_appearance = espp::Ndef::BtAppearance::GAMEPAD;
   auto ble_oob_record =
-    espp::Ndef::make_le_oob_pairing(radio_mac_addr, ble_role, device_name, ble_appearance, tk);
+    espp::Ndef::make_le_oob_pairing(radio_mac_addr, ble_role, device_name, ble_appearance,
+                                    randomizer_value, confirmation_value); // , tk);
 
   // set one of the records we made to be the active tag
   st25dv.set_record(ble_oob_record);
 
-  logger.info("bt oob record:  {::#x}", bt_oob_record.payload());
-  logger.info("ble oob record:  {::#x}", ble_oob_record.payload());
+  logger.debug("bt oob record:  {::#x}", bt_oob_record.payload());
+  logger.debug("ble oob record: {::#x}", ble_oob_record.payload());
 
   // Make a task that will run in the background and print the interrupt status
   // when it changes

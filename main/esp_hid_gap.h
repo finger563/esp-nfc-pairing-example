@@ -43,6 +43,9 @@ typedef struct esp_hidh_scan_result_s {
     };
 } esp_hid_scan_result_t;
 
+bool has_created_oob_sec_data(void);
+esp_ble_local_oob_data_t* get_oob_sec_data_ptr();
+
 esp_err_t esp_hid_gap_init();
 esp_err_t esp_hid_scan(uint32_t seconds, size_t *num_results, esp_hid_scan_result_t **results);
 void esp_hid_scan_results_free(esp_hid_scan_result_t *results);

@@ -3,6 +3,13 @@
 Example application for ESP32S3 to demonstrate NFC OOB BLE pairing with an Android
 phone.
 
+For information regarding BLE OOB Secure Simple Pairing, see section 3.2 of
+[this
+pdf](https://members.nfc-forum.org/apps/group_public/download.php/18688/NFCForum-AD-BTSSP_1_1.pdf)
+
+For more information, see [this ST25DV OOB Pairing
+PDF](https://www.st.com/resource/en/user_manual/um2710-st25dvi2c-outofband-pairing-demonstration-stmicroelectronics.pdf)
+
 ## Cloning
 
 Since this repo contains a submodule, you need to make sure you clone it

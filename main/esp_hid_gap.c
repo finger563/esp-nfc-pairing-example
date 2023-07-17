@@ -15,6 +15,8 @@
 
 static const char *TAG = "ESP_HID_GAP";
 
+static bool created_oob_data = false;
+static esp_ble_local_oob_data_t oob_data;
 static SemaphoreHandle_t ble_hidh_cb_semaphore = NULL;
 #define WAIT_BLE_CB() xSemaphoreTake(ble_hidh_cb_semaphore, portMAX_DELAY)
 #define SEND_BLE_CB() xSemaphoreGive(ble_hidh_cb_semaphore)
@@ -49,6 +51,14 @@ static const char *ble_gap_evt_names[] = {"ADV_DATA_SET_COMPLETE",
                                           "GET_BOND_DEV_COMPLETE",
                                           "READ_RSSI_COMPLETE",
                                           "UPDATE_WHITELIST_COMPLETE"};
+
+bool has_created_oob_sec_data() {
+    return created_oob_data;
+}
+
+esp_ble_local_oob_data_t* get_oob_sec_data_ptr() {
+    return &oob_data;
+}
 
 const char *ble_gap_evt_str(uint8_t event) {
     if (event >= SIZEOF_ARRAY(ble_gap_evt_names)) {
@@ -108,7 +118,7 @@ static void ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_p
      * SCAN
      * */
     case ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT: {
-        ESP_LOGV(TAG, "BLE GAP EVENT SCAN_PARAM_SET_COMPLETE");
+        ESP_LOGI(TAG, "BLE GAP EVENT SCAN_PARAM_SET_COMPLETE");
         SEND_BLE_CB();
         break;
     }
@@ -117,7 +127,7 @@ static void ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_p
         break;
     }
     case ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT: {
-        ESP_LOGV(TAG, "BLE GAP EVENT SCAN CANCELED");
+        ESP_LOGI(TAG, "BLE GAP EVENT SCAN CANCELED");
         break;
     }
 
@@ -125,7 +135,7 @@ static void ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_p
      * ADVERTISEMENT
      * */
     case ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT:
-        ESP_LOGV(TAG, "BLE GAP ADV_DATA_SET_COMPLETE");
+        ESP_LOGI(TAG, "BLE GAP ADV_DATA_SET_COMPLETE");
         break;
 
     case ESP_GAP_BLE_ADV_START_COMPLETE_EVT:
@@ -146,7 +156,7 @@ static void ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_p
      * CONNECTION
      * */
     case ESP_GAP_BLE_GET_DEV_NAME_COMPLETE_EVT:
-        ESP_LOGV(TAG, "BLE GAP GET_DEV_NAME_COMPLETE");
+        ESP_LOGI(TAG, "BLE GAP GET_DEV_NAME_COMPLETE");
         // print the name
         ESP_LOGI(TAG, "BLE GAP DEVICE NAME: %s", param->get_dev_name_cmpl.name);
         break;
@@ -155,17 +165,17 @@ static void ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_p
      * BOND
      * */
     case ESP_GAP_BLE_REMOVE_BOND_DEV_COMPLETE_EVT:
-        ESP_LOGV(TAG, "BLE GAP REMOVE_BOND_DEV_COMPLETE");
+        ESP_LOGI(TAG, "BLE GAP REMOVE_BOND_DEV_COMPLETE");
         // log the bond that was removed
         esp_log_buffer_hex(TAG, param->remove_bond_dev_cmpl.bd_addr, ESP_BD_ADDR_LEN);
         break;
 
     case ESP_GAP_BLE_CLEAR_BOND_DEV_COMPLETE_EVT:
-        ESP_LOGV(TAG, "BLE GAP CLEAR_BOND_DEV_COMPLETE");
+        ESP_LOGI(TAG, "BLE GAP CLEAR_BOND_DEV_COMPLETE");
         break;
 
     case ESP_GAP_BLE_GET_BOND_DEV_COMPLETE_EVT:
-        ESP_LOGV(TAG, "BLE GAP GET_BOND_DEV_COMPLETE");
+        ESP_LOGI(TAG, "BLE GAP GET_BOND_DEV_COMPLETE");
         break;
 
     /*
@@ -212,24 +222,28 @@ static void ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_p
 
     case ESP_GAP_BLE_OOB_REQ_EVT:
         // OOB request event
-        ESP_LOGW(TAG, "BLE GAP OOB_REQ");
+        ESP_LOGI(TAG, "BLE GAP OOB_REQ");
         uint8_t TK[16] = {0x01};
         esp_ble_oob_req_reply(param->ble_security.ble_req.bd_addr, TK, sizeof(TK));
         break;
 
     case ESP_GAP_BLE_SC_OOB_REQ_EVT:
         // secure connection oob request event
-        ESP_LOGW(TAG, "BLE GAP SC_OOB_REQ");
-        // create confirmation value (128-bit random number)
-        uint8_t C[16] = {0x00};
-        // create randomizer value, should be 128bit random number
-        uint8_t R[16] = {0x00};
-        esp_ble_sc_oob_req_reply(param->ble_security.ble_req.bd_addr, C, R);
+        ESP_LOGI(TAG, "BLE GAP SC_OOB_REQ");
+        esp_err_t err = esp_ble_sc_oob_req_reply(param->ble_security.ble_req.bd_addr, oob_data.oob_c, oob_data.oob_r);
+        if (err) {
+            ESP_LOGE(TAG, "esp_ble_sc_oob_req_reply: %s", esp_err_to_name(err));
+        }
         break;
 
     case ESP_GAP_BLE_SC_CR_LOC_OOB_EVT:
         // secure connection create oob data complete event
-        ESP_LOGW(TAG, "BLE GAP SC_CR_LOC_OOB");
+        ESP_LOGI(TAG, "BLE GAP SC_CR_LOC_OOB");
+        // retrieve and store the local oob data
+        memcpy(oob_data.oob_c, param->ble_security.oob_data.oob_c, ESP_BT_OCTET16_LEN);
+        memcpy(oob_data.oob_r, param->ble_security.oob_data.oob_r, ESP_BT_OCTET16_LEN);
+        // save that we've received the local oob data
+        created_oob_data = true;
         break;
 
     case ESP_GAP_BLE_SEC_REQ_EVT:
@@ -238,6 +252,10 @@ static void ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_p
         // request. If not accept the security request, should send the security response with
         // negative(false) accept value.
         esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, true);
+        break;
+
+    case ESP_GAP_BLE_PHY_UPDATE_COMPLETE_EVT:
+        ESP_LOGI(TAG, "BLE GAP PHY_UPDATE_COMPLETE");
         break;
 
     default:
@@ -305,8 +323,9 @@ esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance,
         .p_manufacturer_data = manufacturer_name,
     };
 
-    // esp_ble_auth_req_t auth_req = ESP_LE_AUTH_BOND;
-    // esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_MITM;
+    // esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_BOND_MITM;
+    // esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_BOND;
+    // esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_MITM;
     esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_MITM_BOND;
     if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_AUTHEN_REQ_MODE, &auth_req, 1)) !=
         ESP_OK) {
