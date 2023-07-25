@@ -7,6 +7,23 @@
 #ifndef _ESP_HID_GAP_H_
 #define _ESP_HID_GAP_H_
 
+#define HIDD_IDLE_MODE 0x00
+#define HIDD_BLE_MODE 0x01
+#define HIDD_BT_MODE 0x02
+#define HIDD_BTDM_MODE 0x03
+
+#if CONFIG_BT_HID_DEVICE_ENABLED
+#if CONFIG_BT_BLE_ENABLED
+#define HID_DEV_MODE HIDD_BTDM_MODE
+#else
+#define HID_DEV_MODE HIDD_BT_MODE
+#endif
+#elif CONFIG_BT_BLE_ENABLED
+#define HID_DEV_MODE HIDD_BLE_MODE
+#else
+#define HID_DEV_MODE HIDD_IDLE_MODE
+#endif
+
 #include "esp_err.h"
 #include "esp_log.h"
 
@@ -15,9 +32,11 @@
 #include "esp_bt_main.h"
 #include "esp_gap_bt_api.h"
 #include "esp_hid_common.h"
+#if CONFIG_BT_BLE_ENABLED
 #include "esp_gap_ble_api.h"
 #include "esp_gatt_defs.h"
 #include "esp_gattc_api.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -43,10 +62,10 @@ typedef struct esp_hidh_scan_result_s {
     };
 } esp_hid_scan_result_t;
 
-bool has_created_oob_sec_data(void);
-esp_ble_local_oob_data_t* get_oob_sec_data_ptr();
+bool has_created_ble_oob_sec_data(void);
+esp_ble_local_oob_data_t* get_ble_oob_sec_data_ptr();
 
-esp_err_t esp_hid_gap_init();
+esp_err_t esp_hid_gap_init(uint8_t mode);
 esp_err_t esp_hid_scan(uint32_t seconds, size_t *num_results, esp_hid_scan_result_t **results);
 void esp_hid_scan_results_free(esp_hid_scan_result_t *results);
 

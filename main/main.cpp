@@ -14,6 +14,7 @@
 
 #include "esp_hid_gap.h"
 #include "ble.hpp"
+#include "bt.hpp"
 
 #include "logger.hpp"
 #include "ndef.hpp"
@@ -23,8 +24,13 @@
 using namespace std::chrono_literals;
 
 static constexpr auto I2C_NUM = I2C_NUM_1;
+#if CONFIG_IDF_TARGET_ESP32S3
 static constexpr auto I2C_SCL_IO = GPIO_NUM_40; // Qwiic SCL on QtPy ESP32S3
 static constexpr auto I2C_SDA_IO = GPIO_NUM_41; // Qwiic SDA on QtPy ESP32S3
+#else
+static constexpr auto I2C_SCL_IO = GPIO_NUM_19; // Qwiic SCL on QtPy ESP32 PICO
+static constexpr auto I2C_SDA_IO = GPIO_NUM_22; // Qwiic SDA on QtPy ESP32 PICO
+#endif
 static constexpr auto I2C_FREQ_HZ = (400 * 1000);
 static constexpr auto I2C_TIMEOUT_MS = 10;
 
@@ -82,12 +88,15 @@ extern "C" void app_main(void) {
     });
 
   // initialize bluedroid stack
-  esp_hid_gap_init();
+#if CONFIG_BT_HID_DEVICE_ENABLED || CONFIG_BT_BLE_ENABLED
+    err = esp_hid_gap_init(HID_DEV_MODE);
+    ESP_ERROR_CHECK(err);
+#endif
 
   // don't want a lot of logs (and all the logs can cause the ble_hid task stack
   // to overflow)
-  esp_log_level_set("HID_DEV_BLE", ESP_LOG_NONE);
-  esp_log_level_set("ESP_HID_GAP", ESP_LOG_INFO);
+  // esp_log_level_set("HID_DEV_BLE", ESP_LOG_NONE);
+  // esp_log_level_set("ESP_HID_GAP", ESP_LOG_INFO);
 
   // get the mac address of the radio
   const uint8_t* point = esp_bt_dev_get_address();
@@ -110,30 +119,49 @@ extern "C" void app_main(void) {
   uint32_t random_number = esp_random();
   std::string serial_number = fmt::format("{:010d}", random_number);
   logger.info("Generated serial number: {}", serial_number);
-  [[maybe_unused]] auto ble_hid_dev = init_ble_hid(0x045E, // Microsoft
-                                                   0x02FD, // Xbox Elite Wireless Controller
-                                                   "Microsoft Corporation",
+
+  uint16_t VID = 0x045E; // Microsoft
+  uint16_t PID = 0x02FD; // Xbox Elite Wireless Controller
+  std::string manufacturer_name = "Microsoft Corporation";
+
+#if CONFIG_BT_BLE_ENABLED
+  [[maybe_unused]] auto ble_hid_dev = init_ble_hid(VID,
+                                                   PID,
+                                                   manufacturer_name.c_str(),
                                                    device_name.c_str(),
                                                    serial_number);
+#endif
+
+#if CONFIG_BT_HID_DEVICE_ENABLED
+  [[maybe_unused]] auto bt_hid_dev = init_bt_hid(VID,
+                                                 PID,
+                                                 manufacturer_name.c_str(),
+                                                 device_name.c_str(),
+                                                 serial_number);
+#endif
+
+  //////////////BLE SECURITY SETUP//////////////////////
 
   // create BLE OOB pairing record
-  esp_ble_create_sc_oob_data();
-
   logger.info("Waiting for OOB data to be created...");
-  while (!has_created_oob_sec_data()) {
+  while (!has_created_ble_oob_sec_data()) {
+    ESP_ERROR_CHECK(esp_ble_create_sc_oob_data());
     std::this_thread::sleep_for(100ms);
+    #if CONFIG_IDF_TARGET_ESP32
+    // on the ESP32 we cannot create the OOB data for some reason...
+    logger.warn("Cannot create OOB data on ESP32, skipping OOB data creation");
+    break;
+    #endif
   }
 
-  // now access it
-  auto oob_data_ptr = get_oob_sec_data_ptr();
+  // now copy the bytes from oob_sec_data into the correct variables
+  std::string confirmation_value{""};
+  std::string randomizer_value{""};
 
-  // now copy the bytes from oob_data_ptr into the correct variables
-  std::string confirmation_value{""};       // 128b
-  std::string randomizer_value{""};         // 128b
-  // set the confirmation value and randomizer value (For now just set both to
-  // 1)
+  #if !CONFIG_IDF_TARGET_ESP32
   confirmation_value.resize(16, 0);
   randomizer_value.resize(16, 0);
+  auto oob_data_ptr = get_ble_oob_sec_data_ptr();
   memcpy(confirmation_value.data(), oob_data_ptr->oob_c, 16);
   memcpy(randomizer_value.data(), oob_data_ptr->oob_r, 16);
 
@@ -147,31 +175,39 @@ extern "C" void app_main(void) {
 
   logger.debug("confirmation value: {::02x}", oob_c);
   logger.debug("randomizer value: {::02x}", oob_r);
-
-  // create BT OOB pairing record
-  uint32_t bt_device_class = 0x000000;      // 24b
-  auto bt_oob_record =
-    espp::Ndef::make_oob_pairing(radio_mac_addr, bt_device_class, device_name,
-                                 randomizer_value, confirmation_value);
+  #endif
 
   // get the temporary key from the esp_ble_sec_t struct
   // it's within esp_ble_sec_t under the oob_data field
-  std::string tk = "";                     // 128b
-  // for now just set it to 1
-  tk.resize(16, 0);
-  tk[0] = 1;
+  uint8_t tk_data[16] = {
+    0x00, 0x00, 0x00, 0x11,
+    0x00, 0x00, 0x00, 0x11,
+    0x00, 0x00, 0x00, 0x11,
+    0x00, 0x00, 0x00, 0x11,
+  };
+  std::string_view tk{reinterpret_cast<char*>(tk_data), 16};
 
+  /////////////NDEF RECORDS/////////////////////
+
+  // make a payload id for the oob record
+  int payload_id = '0';
+
+  uint32_t device_class = 0x000000; // 24b
   auto ble_role = espp::Ndef::BleRole::PERIPHERAL_ONLY;
   auto ble_appearance = espp::Ndef::BtAppearance::GAMEPAD;
-  auto ble_oob_record =
-    espp::Ndef::make_le_oob_pairing(radio_mac_addr, ble_role, device_name, ble_appearance,
-                                    randomizer_value, confirmation_value); // , tk);
 
-  // set one of the records we made to be the active tag
-  st25dv.set_record(ble_oob_record);
+  std::vector<espp::Ndef> records;
+  records.emplace_back(espp::Ndef::make_handover_select(payload_id));
+  records.emplace_back(espp::Ndef::make_oob_pairing(radio_mac_addr, device_class, device_name));
+  records.emplace_back(espp::Ndef::make_le_oob_pairing(radio_mac_addr, ble_role, device_name, ble_appearance,
+                                                       randomizer_value, confirmation_value, tk));
 
-  logger.debug("bt oob record:  {::#x}", bt_oob_record.payload());
-  logger.debug("ble oob record: {::#x}", ble_oob_record.payload());
+  // set the id of the ble oob record
+  records[1].set_id(payload_id);
+
+  st25dv.set_records(records);
+
+  /////////////FIELD MONITORING/////////////////////
 
   // Make a task that will run in the background and print the interrupt status
   // when it changes
@@ -189,7 +225,7 @@ extern "C" void app_main(void) {
         // we don't want to stop the task, so return false
         return false;
       },
-      .stack_size_bytes = 4096,
+      .stack_size_bytes = 5 * 1024,
     });
   task.start();
 
