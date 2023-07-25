@@ -95,8 +95,8 @@ extern "C" void app_main(void) {
 
   // don't want a lot of logs (and all the logs can cause the ble_hid task stack
   // to overflow)
-  // esp_log_level_set("HID_DEV_BLE", ESP_LOG_NONE);
-  // esp_log_level_set("ESP_HID_GAP", ESP_LOG_INFO);
+  esp_log_level_set("HID_DEV_BLE", ESP_LOG_NONE);
+  esp_log_level_set("ESP_HID_GAP", ESP_LOG_INFO);
 
   // get the mac address of the radio
   const uint8_t* point = esp_bt_dev_get_address();
