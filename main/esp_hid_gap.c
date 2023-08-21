@@ -394,6 +394,7 @@ esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance,
         0x00,
     };
 
+    #if 1
     // config adv data
     esp_ble_adv_data_t ble_adv_config = {
         .set_scan_rsp = false,
@@ -417,79 +418,52 @@ esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance,
         .manufacturer_len = sizeof(manufacturer_name),
         .p_manufacturer_data = manufacturer_name,
     };
+    #else
+    uint8_t raw_adv_data[] = {
+        0x02, 0x01, 0x06,  // Flags
+        0x02, 0x0a, 0x09,  // Tx Power Level
+        0x03, 0x03, 0x12, 0x18,  // 16-bit Service Class UUIDs
+        0x05, 0x12, 0x06, 0x00, 0x0c, 0x00,  //Periphral Connection Interval Range
+        0x02, 0x11, 0x03,  // SM OOB Flags
+    };
 
-    // TODO: this auth mode works, but requires many prompts
-    // esp_ble_auth_req_t auth_req = ESP_LE_AUTH_BOND;
+    static uint8_t raw_scan_rsp_data[] = {
+        0x03, 0x19, 0xc4, 0x03,  // Appearance
+        0x1a, 0x08, 0x4e, 0x46, 0x43, 0x20, 0x58, 0x62, 0x6f, 0x78, 0x20, 0x45, 0x6c, 0x69,
+        0x74, 0x65, 0x20, 0x57, 0x69, 0x72, 0x65, 0x6c, 0x65, 0x73, 0x73, 0x20, 0x43,  // Shortened Local Name
+    };
+    #endif
 
-    // TODO: this auth mode times out or blocks after getting the SC_OOB_REQ event
     esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_MITM_BOND;
-
-    if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_AUTHEN_REQ_MODE, &auth_req, 1)) !=
-        ESP_OK) {
-        ESP_LOGE(TAG, "GAP set_security_param AUTHEN_REQ_MODE failed: %d", ret);
-        return ret;
-    }
-
-    esp_ble_io_cap_t iocap = ESP_IO_CAP_NONE; // device is not capable of input or output, unsecure
-    if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_IOCAP_MODE, &iocap, 1)) != ESP_OK) {
-        ESP_LOGE(TAG, "GAP set_security_param IOCAP_MODE failed: %d", ret);
-        return ret;
-    }
-
-    uint8_t oob_support = ESP_BLE_OOB_ENABLE;
-    if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_OOB_SUPPORT, &oob_support, sizeof(uint8_t))) != ESP_OK) {
-        ESP_LOGE(TAG, "GAP set_security_param OOB_SUPPORT failed: %d", ret);
-        return ret;
-    }
-
+    esp_ble_io_cap_t iocap = ESP_IO_CAP_IO;
+    uint8_t oob_support = ESP_BLE_OOB_DISABLE;
     uint8_t spec_auth = ESP_BLE_ONLY_ACCEPT_SPECIFIED_AUTH_ENABLE;
-    if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_ONLY_ACCEPT_SPECIFIED_SEC_AUTH, &spec_auth, sizeof(uint8_t))) != ESP_OK) {
-        ESP_LOGE(TAG, "GAP set_security_param ONLY_ACCEPT_SPECIFIED_SEC_AUTH failed: %d", ret);
-        return ret;
-    }
+
+    // esp_ble_gap_set_security_param(ESP_BLE_SM_SET_STATIC_PASSKEY, (void*)&PASSKEY, sizeof(uint32_t));
+    esp_ble_gap_set_security_param(ESP_BLE_SM_IOCAP_MODE, &iocap, 1);
+    esp_ble_gap_set_security_param(ESP_BLE_SM_AUTHEN_REQ_MODE, &auth_req, 1);
+    esp_ble_gap_set_security_param(ESP_BLE_SM_OOB_SUPPORT, &oob_support, sizeof(uint8_t));
+    esp_ble_gap_set_security_param(ESP_BLE_SM_ONLY_ACCEPT_SPECIFIED_SEC_AUTH, &spec_auth, sizeof(uint8_t));
 
     uint8_t init_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
     uint8_t rsp_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
     uint8_t key_size = 16; //the key size should be 7~16 bytes
-    uint32_t passkey = 1234;//ESP_IO_CAP_OUT
-    if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_SET_INIT_KEY, &init_key, 1)) != ESP_OK) {
-        ESP_LOGE(TAG, "GAP set_security_param SET_INIT_KEY failed: %d", ret);
-        return ret;
-    }
 
-    if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rsp_key, 1)) != ESP_OK) {
-        ESP_LOGE(TAG, "GAP set_security_param SET_RSP_KEY failed: %d", ret);
-        return ret;
-    }
+    esp_ble_gap_set_security_param(ESP_BLE_SM_SET_INIT_KEY, &init_key, 1);
+    esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rsp_key, 1);
+    esp_ble_gap_set_security_param(ESP_BLE_SM_MAX_KEY_SIZE, &key_size, 1);
 
-    if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_MAX_KEY_SIZE, &key_size, 1)) != ESP_OK) {
-        ESP_LOGE(TAG, "GAP set_security_param MAX_KEY_SIZE failed: %d", ret);
-        return ret;
-    }
+    esp_ble_gap_set_device_name(device_name);
 
-    /*
-    if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_SET_STATIC_PASSKEY, &passkey,
-    sizeof(uint32_t))) != ESP_OK) { ESP_LOGE(TAG, "GAP set_security_param SET_STATIC_PASSKEY failed:
-    %d", ret); return ret;
-    }
-    */
+    #if 1
+    esp_ble_gap_config_adv_data(&ble_adv_config);
+    esp_ble_gap_config_adv_data(&ble_scan_rsp_config);
+    #else
+    esp_ble_gap_config_adv_data_raw(raw_adv_data, sizeof(raw_adv_data));
+    esp_ble_gap_config_scan_rsp_data_raw(raw_scan_rsp_data, sizeof(raw_scan_rsp_data));
+    #endif
 
-    if ((ret = esp_ble_gap_set_device_name(device_name)) != ESP_OK) {
-        ESP_LOGE(TAG, "GAP set_device_name failed: %d", ret);
-        return ret;
-    }
-
-    if ((ret = esp_ble_gap_config_adv_data(&ble_adv_config)) != ESP_OK) {
-        ESP_LOGE(TAG, "GAP config_adv_data failed: %d", ret);
-        return ret;
-    }
-
-    if ((ret = esp_ble_gap_config_adv_data(&ble_scan_rsp_config)) != ESP_OK) {
-        ESP_LOGE(TAG, "GAP config_adv_data ble_scan_rsp_config failed: %d", ret);
-        return ret;
-    }
-
-    return ret;
+    return ESP_OK;
 }
 
 esp_err_t esp_hid_ble_gap_adv_start(void) {
