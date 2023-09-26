@@ -198,12 +198,12 @@ extern "C" void app_main(void) {
 
   std::vector<espp::Ndef> records;
   records.emplace_back(espp::Ndef::make_handover_select(payload_id));
+  records.emplace_back(espp::Ndef::make_oob_pairing(radio_mac_addr, device_class, device_name));
   records.emplace_back(espp::Ndef::make_le_oob_pairing(radio_mac_addr, ble_role, device_name, ble_appearance,
                                                        randomizer_value, confirmation_value, tk));
-  records.emplace_back(espp::Ndef::make_oob_pairing(radio_mac_addr, device_class, device_name));
 
   // set the id of the ble oob record
-  records[1].set_id(payload_id);
+  records[2].set_id(payload_id);
 
   st25dv.set_records(records);
 
