@@ -192,7 +192,17 @@ extern "C" void app_main(void) {
   // make a payload id for the oob record
   int payload_id = '0';
 
-  uint32_t device_class = 0x000000; // 24b
+  // Bluetooth device class for gamepad, see
+  // https://www.ampedrftech.com/datasheets/cod_definition.pdf
+  // and is represented as 3 octets, with octet 1 being LSB
+  // High 6 bits of octet 1 is Minor Device Class
+  // Low 5 bits of octet 2 is Major Device Class
+  // Octet 3 + high 3 bits of octet 2 is Major Service Class
+  // 0x002508: Gamepad
+  // Major Service Class: 0x002000: Limited Discoverable Mode
+  // Major Device Class:  0x000500: Peripheral
+  // Minor Device Class:  0x000008: Gamepad
+  uint32_t device_class = 0x002508;
   auto ble_role = espp::Ndef::BleRole::PERIPHERAL_ONLY;
   auto ble_appearance = espp::Ndef::BtAppearance::GAMEPAD;
 
