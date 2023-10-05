@@ -435,9 +435,9 @@ esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance,
     #endif
 
     esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_MITM_BOND;
-    esp_ble_io_cap_t iocap = ESP_IO_CAP_IO;
+    esp_ble_io_cap_t iocap = ESP_IO_CAP_NONE;
     uint8_t oob_support = ESP_BLE_OOB_DISABLE;
-    uint8_t spec_auth = ESP_BLE_ONLY_ACCEPT_SPECIFIED_AUTH_ENABLE;
+    uint8_t spec_auth = ESP_BLE_ONLY_ACCEPT_SPECIFIED_AUTH_DISABLE;
 
     // esp_ble_gap_set_security_param(ESP_BLE_SM_SET_STATIC_PASSKEY, (void*)&PASSKEY, sizeof(uint32_t));
     esp_ble_gap_set_security_param(ESP_BLE_SM_IOCAP_MODE, &iocap, 1);
