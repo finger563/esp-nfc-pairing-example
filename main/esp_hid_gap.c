@@ -15,7 +15,6 @@
 
 static const char *TAG = "ESP_HID_GAP";
 
-static bool created_ble_oob_data = false;
 static esp_ble_local_oob_data_t ble_oob_sec_data = {0};
 static uint8_t TK[16] = {
     0x00, 0x00, 0x00, 0x11,
@@ -34,9 +33,9 @@ static SemaphoreHandle_t ble_hidh_cb_semaphore = NULL;
 
 #define SIZEOF_ARRAY(a) (sizeof(a) / sizeof(*a))
 
-bool has_created_ble_oob_sec_data() {
-    return created_ble_oob_data;
-}
+typedef void (*oob_create_cb_t)(void);
+static oob_create_cb_t oob_create_cb = NULL;
+
 esp_ble_local_oob_data_t* get_ble_oob_sec_data_ptr() {
     return &ble_oob_sec_data;
 }
@@ -289,6 +288,8 @@ static void ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_p
             esp_log_buffer_hex(TAG, param->ble_security.auth_cmpl.bd_addr, ESP_BD_ADDR_LEN);
             // save the address of the peer device
             memcpy(ble_peer_address, param->ble_security.auth_cmpl.bd_addr, ESP_BD_ADDR_LEN);
+            // regenerate the oob data
+            esp_ble_create_sc_oob_data();
         }
         break;
 
@@ -337,8 +338,9 @@ static void ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_p
         // retrieve and store the local oob data
         memcpy(ble_oob_sec_data.oob_c, param->ble_security.oob_data.oob_c, ESP_BT_OCTET16_LEN);
         memcpy(ble_oob_sec_data.oob_r, param->ble_security.oob_data.oob_r, ESP_BT_OCTET16_LEN);
-        // save that we've received the local oob data
-        created_ble_oob_data = true;
+        if (oob_create_cb) {
+            oob_create_cb();
+        }
         break;
 
     case ESP_GAP_BLE_SEC_REQ_EVT:
@@ -544,7 +546,8 @@ static esp_err_t init_low_level(uint8_t mode) {
     return ret;
 }
 
-esp_err_t esp_hid_gap_init(uint8_t mode) {
+esp_err_t esp_hid_gap_init(uint8_t mode, void (*_oob_create_cb)(void)) {
+    oob_create_cb = _oob_create_cb;
     esp_err_t ret;
     if (!mode || mode > ESP_BT_MODE_BTDM) {
         ESP_LOGE(TAG, "Invalid mode given!");
