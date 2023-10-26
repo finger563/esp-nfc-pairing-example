@@ -396,7 +396,6 @@ esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance,
         0x00,
     };
 
-    #if 1
     // config adv data
     esp_ble_adv_data_t ble_adv_config = {
         .set_scan_rsp = false,
@@ -420,21 +419,6 @@ esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance,
         .manufacturer_len = sizeof(manufacturer_name),
         .p_manufacturer_data = manufacturer_name,
     };
-    #else
-    uint8_t raw_adv_data[] = {
-        0x02, 0x01, 0x06,  // Flags
-        0x02, 0x0a, 0x09,  // Tx Power Level
-        0x03, 0x03, 0x12, 0x18,  // 16-bit Service Class UUIDs
-        0x05, 0x12, 0x06, 0x00, 0x0c, 0x00,  //Periphral Connection Interval Range
-        0x02, 0x11, 0x03,  // SM OOB Flags
-    };
-
-    static uint8_t raw_scan_rsp_data[] = {
-        0x03, 0x19, 0xc4, 0x03,  // Appearance
-        0x1a, 0x08, 0x4e, 0x46, 0x43, 0x20, 0x58, 0x62, 0x6f, 0x78, 0x20, 0x45, 0x6c, 0x69,
-        0x74, 0x65, 0x20, 0x57, 0x69, 0x72, 0x65, 0x6c, 0x65, 0x73, 0x73, 0x20, 0x43,  // Shortened Local Name
-    };
-    #endif
 
     esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_MITM_BOND;
     esp_ble_io_cap_t iocap = ESP_IO_CAP_NONE;
@@ -457,13 +441,8 @@ esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance,
 
     esp_ble_gap_set_device_name(device_name);
 
-    #if 1
     esp_ble_gap_config_adv_data(&ble_adv_config);
     esp_ble_gap_config_adv_data(&ble_scan_rsp_config);
-    #else
-    esp_ble_gap_config_adv_data_raw(raw_adv_data, sizeof(raw_adv_data));
-    esp_ble_gap_config_scan_rsp_data_raw(raw_scan_rsp_data, sizeof(raw_scan_rsp_data));
-    #endif
 
     return ESP_OK;
 }
