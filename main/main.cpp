@@ -30,6 +30,8 @@ static constexpr auto I2C_SDA_IO = GPIO_NUM_41; // Qwiic SDA on QtPy ESP32S3
 #else
 static constexpr auto I2C_SCL_IO = GPIO_NUM_19; // Qwiic SCL on QtPy ESP32 PICO
 static constexpr auto I2C_SDA_IO = GPIO_NUM_22; // Qwiic SDA on QtPy ESP32 PICO
+#warning "WARNING: QtPy ESP32 PICO uses ESP32-PICO-V3-02, which does not support OOB data creation!"
+#warning "         If you are using a ESP32-PICO, make sure it is a ESP32-PICO-D4 or later!"
 #endif
 static constexpr auto I2C_FREQ_HZ = (400 * 1000);
 static constexpr auto I2C_TIMEOUT_MS = 10;
@@ -47,7 +49,6 @@ extern "C" void regenerate_nfc_pairing_record() {
   std::string confirmation_value{""};
   std::string randomizer_value{""};
 
-  #if !CONFIG_IDF_TARGET_ESP32
   confirmation_value.resize(16, 0);
   randomizer_value.resize(16, 0);
   auto oob_data_ptr = get_ble_oob_sec_data_ptr();
@@ -61,7 +62,6 @@ extern "C" void regenerate_nfc_pairing_record() {
   oob_c.resize(16, 0);
   memcpy(oob_r.data(), randomizer_value.data(), randomizer_value.size());
   memcpy(oob_c.data(), confirmation_value.data(), confirmation_value.size());
-  #endif
 
   // get the temporary key from the esp_ble_sec_t struct
   // it's within esp_ble_sec_t under the oob_data field
@@ -147,14 +147,14 @@ extern "C" void app_main(void) {
   auto i2c_write_read = [](uint8_t addr, uint16_t reg_addr, uint8_t *data, uint8_t length) {
     uint8_t reg[2] = {(uint8_t)(reg_addr >> 8), (uint8_t)(reg_addr & 0xFF)};
     i2c_master_write_read_device(I2C_NUM, addr, reg, 2, data, length,
-                                 I2C_TIMEOUT_MS / portTICK_PERIOD_MS);
+                                            I2C_TIMEOUT_MS / portTICK_PERIOD_MS);
   };
 
   // now make the st25dv which decodes the data
   st25dv = std::make_shared<espp::St25dv>(espp::St25dv::Config{
       .write = i2c_write,
       .read = i2c_write_read,
-      .log_level = espp::Logger::Verbosity::INFO
+      .log_level = espp::Logger::Verbosity::DEBUG
     });
 
   // initialize bluedroid stack
