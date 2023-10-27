@@ -3,6 +3,15 @@
 Example application for ESP32S3 to demonstrate NFC OOB BLE pairing with an Android
 phone.
 
+For information regarding BLE OOB Secure Simple Pairing, see section 3.2 of
+[this
+pdf](https://members.nfc-forum.org/apps/group_public/download.php/18688/NFCForum-AD-BTSSP_1_1.pdf)
+
+For more information, see [this ST25DV OOB Pairing
+PDF](https://www.st.com/resource/en/user_manual/um2710-st25dvi2c-outofband-pairing-demonstration-stmicroelectronics.pdf)
+
+https://github.com/finger563/esp-nfc-pairing-example/assets/213467/12bece04-84c9-477d-a241-98e56c582306
+
 ## Cloning
 
 Since this repo contains a submodule, you need to make sure you clone it
@@ -37,6 +46,10 @@ See the Getting Started Guide for full steps to configure and use ESP-IDF to bui
 
 Example screenshot of the console output from this app:
 
-![CleanShot 2023-07-14 at 12 17 21](https://github.com/finger563/esp-nfc-pairing-example/assets/213467/d66dac41-f687-4e1d-b6dd-30feba18f6c3)
+![CleanShot 2023-10-26 at 15 42 30](https://github.com/finger563/esp-nfc-pairing-example/assets/213467/5e4a26da-7d9a-4525-883b-52887a9f283b)
 
-https://github.com/finger563/esp-nfc-pairing-example/assets/213467/2768ae6b-b283-4760-aa0d-be04ef730260
+![image](https://github.com/finger563/esp-nfc-pairing-example/assets/213467/0adadfd9-1756-4004-962d-7352b26aaeb2)
+
+![image](https://github.com/finger563/esp-nfc-pairing-example/assets/213467/316519a2-39ac-4a54-805c-2039f784dfa5)
+
+https://github.com/finger563/esp-nfc-pairing-example/assets/213467/12bece04-84c9-477d-a241-98e56c582306
